@@ -11,26 +11,29 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
+    "@supabase/supabase-js": "^2.38.4",
+    "@vercel/speed-insights": "^2.0.0",
+    "axios": "^1.6.0",
+    "date-fns": "^2.30.0",
+    "next": "^14.0.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "next": "^14.0.4",
-    "@supabase/supabase-js": "^2.38.4",
-    "@supabase/auth-helpers-nextjs": "^0.7.5",
-    "tailwindcss": "^3.3.6",
-    "axios": "^1.6.0",
-    "zustand": "^4.4.0",
     "react-query": "^3.39.3",
-    "zod": "^3.22.4",
     "recharts": "^2.10.3",
-    "date-fns": "^2.30.0"
+    "tailwindcss": "^3.3.6",
+    "zod": "^3.22.4",
+    "zustand": "^4.4.0"
   },
   "devDependencies": {
-    "@types/react": "^18.2.45",
+    "@tailwindcss/forms": "^0.5.7",
     "@types/node": "^20.10.6",
-    "typescript": "^5.3.3",
+    "@types/react": "^18.2.45",
+    "autoprefixer": "^10.6.1",
     "eslint": "^8.56.0",
     "eslint-config-next": "^14.0.4",
-    "@tailwindcss/forms": "^0.5.7"
+    "postcss": "^8.5.28",
+    "typescript": "^5.3.3"
   },
   "engines": {
     "node": "20.x"
