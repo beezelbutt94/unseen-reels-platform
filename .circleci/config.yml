@@ -1,0 +1,161 @@
+version: 2.1
+
+# ─── Executors ──────────────────────────────────────────────────────────────
+executors:
+  node20:
+    docker:
+      - image: cimg/node:20.10
+    resource_class: medium
+    working_directory: ~/project
+
+# ─── Jobs ───────────────────────────────────────────────────────────────────
+jobs:
+
+  # Install backend deps once; cache and persist node_modules to workspace.
+  # Cache key includes package.json checksum — bump v1 → v2 to bust stale cache.
+  # NOTE: Commit backend/package-lock.json for deterministic installs and a
+  # tighter cache key: replace package.json with package-lock.json below.
+  install-backend:
+    executor: node20
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-backend-{{ checksum "backend/package.json" }}
+            - v1-backend-
+      - run:
+          name: Install backend dependencies
+          command: cd backend && npm install
+      - save_cache:
+          key: v1-backend-{{ checksum "backend/package.json" }}
+          paths:
+            - backend/node_modules
+      - persist_to_workspace:
+          root: ~/project
+          paths:
+            - backend/node_modules
+
+  # Install frontend deps once; cache and persist node_modules to workspace.
+  # NOTE: Commit frontend/package-lock.json for deterministic installs.
+  install-frontend:
+    executor: node20
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-frontend-{{ checksum "frontend/package.json" }}
+            - v1-frontend-
+      - run:
+          name: Install frontend dependencies
+          command: cd frontend && npm install
+      - save_cache:
+          key: v1-frontend-{{ checksum "frontend/package.json" }}
+          paths:
+            - frontend/node_modules
+      - persist_to_workspace:
+          root: ~/project
+          paths:
+            - frontend/node_modules
+
+  # Run backend lint and type-check in a single job to reduce scheduler overhead.
+  # Note: the "lint" script uses eslint --fix; unfixable issues still fail CI.
+  lint-typecheck-backend:
+    executor: node20
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/project
+      - run:
+          name: Lint backend
+          command: cd backend && npm run lint
+      - run:
+          name: Type-check backend
+          command: cd backend && npm run type-check
+
+  # Vitest auto-detects CI=true (set by CircleCI) and runs in non-watch mode.
+  test-backend:
+    executor: node20
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/project
+      - run:
+          name: Run backend tests
+          command: cd backend && npm test
+
+  # Compile TypeScript → dist/. Only runs after lint + tests pass.
+  build-backend:
+    executor: node20
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/project
+      - run:
+          name: Build backend
+          command: cd backend && npm run build
+      - store_artifacts:
+          path: backend/dist
+          destination: backend-dist
+
+  # Run frontend lint and type-check in a single job.
+  lint-typecheck-frontend:
+    executor: node20
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/project
+      - run:
+          name: Lint frontend
+          command: cd frontend && npm run lint
+      - run:
+          name: Type-check frontend
+          command: cd frontend && npm run type-check
+
+  # Next.js production build. Requires NEXT_PUBLIC_* env vars to be set
+  # as CircleCI project-level environment variables if they are used in code.
+  build-frontend:
+    executor: node20
+    # Next.js builds benefit from more memory on large projects
+    resource_class: medium+
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/project
+      - run:
+          name: Build frontend
+          command: cd frontend && npm run build
+      - store_artifacts:
+          path: frontend/.next
+          destination: frontend-next
+
+# ─── Workflows ──────────────────────────────────────────────────────────────
+workflows:
+  ci:
+    jobs:
+      # ── Parallel installs ──────────────────────────────────────────────────
+      - install-backend
+      - install-frontend
+
+      # ── Backend (parallel after install) ──────────────────────────────────
+      - lint-typecheck-backend:
+          requires:
+            - install-backend
+      - test-backend:
+          requires:
+            - install-backend
+
+      # Build only after lint + tests are green
+      - build-backend:
+          requires:
+            - lint-typecheck-backend
+            - test-backend
+
+      # ── Frontend (parallel after install) ─────────────────────────────────
+      - lint-typecheck-frontend:
+          requires:
+            - install-frontend
+
+      # Build only after lint + typecheck are green
+      - build-frontend:
+          requires:
+            - lint-typecheck-frontend
